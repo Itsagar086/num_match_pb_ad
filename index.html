@@ -1754,9 +1754,63 @@
         window.addEventListener("touchend", handleEnd);
       },
       
+      valueAt(r, c) {
+        return this.grid[r]?.[c]?.value ?? null;
+      },
+      
+      compareCells(a, b) {
+        return a.row === b.row ? a.col - b.col : a.row - b.row;
+      },
+      
+      betweenLine(a, b, rowStep, colStep) {
+        const cells = [];
+        let r = a.row + rowStep;
+        let c = a.col + colStep;
+        while (r !== b.row || c !== b.col) {
+          cells.push({ row: r, col: c });
+          r += rowStep;
+          c += colStep;
+        }
+        return cells;
+      },
+      
+      wrapBetween(a, b) {
+        const [start, end] = this.compareCells(a, b) <= 0 ? [a, b] : [b, a];
+        if (end.row <= start.row) return null;
+        const cells = [];
+        const width = 9;
+        for (let col = start.col + 1; col < width; col++) cells.push({ row: start.row, col });
+        for (let row = start.row + 1; row < end.row; row++) {
+          for (let col = 0; col < width; col++) cells.push({ row: row, col: col });
+        }
+        for (let col = 0; col < end.col; col++) cells.push({ row: end.row, col });
+        return cells;
+      },
+      
+      getPathCells(a, b) {
+        if (a.row === b.row && a.col === b.col) return { pathType: "none", between: [] };
+        if (a.row === b.row) return { pathType: "horizontal", between: this.betweenLine(a, b, 0, Math.sign(b.col - a.col)) };
+        if (a.col === b.col) return { pathType: "vertical", between: this.betweenLine(a, b, Math.sign(b.row - a.row), 0) };
+        if (Math.abs(a.row - b.row) === Math.abs(a.col - b.col)) {
+          return { pathType: "diagonal", between: this.betweenLine(a, b, Math.sign(b.row - a.row), Math.sign(b.col - a.col)) };
+        }
+        const wrap = this.wrapBetween(a, b);
+        return wrap ? { pathType: "wrap", between: wrap } : { pathType: "none", between: [] };
+      },
+      
+      inspectPath(a, b) {
+        const path = this.getPathCells(a, b);
+        const blockers = path.between.filter((cell) => this.valueAt(cell.row, cell.col) !== null);
+        return {
+          pathType: path.pathType,
+          blockers,
+          result: path.pathType !== "none" && blockers.length === 0
+        };
+      },
+
       checkMatch(r1, c1, r2, c2) {
-        const val1 = this.grid[r1][c1].value;
-        const val2 = this.grid[r2][c2].value;
+        const val1 = this.valueAt(r1, c1);
+        const val2 = this.valueAt(r2, c2);
         
         if (val1 === null || val2 === null) return false;
         
@@ -1764,61 +1818,46 @@
         const isSame = (val1 === val2);
         if (!isSum10 && !isSame) return false;
         
-        if (this.checkDirectAdjacency(r1, c1, r2, c2)) return true;
-        if (this.checkWrapAroundAdjacency(r1, c1, r2, c2)) return true;
-        
-        return false;
-      },
-      
-      checkDirectAdjacency(r1, c1, r2, c2) {
-        const dr = Math.sign(r2 - r1);
-        const dc = Math.sign(c2 - c1);
-        
-        const isHorizontal = (r1 === r2);
-        const isVertical = (c1 === c2);
-        const isDiagonal = (Math.abs(r2 - r1) === Math.abs(c2 - c1));
-        
-        if (!isHorizontal && !isVertical && !isDiagonal) return false;
-        
-        let cr = r1 + dr;
-        let cc = c1 + dc;
-        
-        while (cr !== r2 || cc !== c2) {
-          if (this.grid[cr][cc].value !== null) {
-            return false;
-          }
-          cr += dr;
-          cc += dc;
-        }
-        
-        return true;
-      },
-      
-      checkWrapAroundAdjacency(r1, c1, r2, c2) {
-        const activeCells = [];
-        for (let r = 0; r < SDK_CONFIG.board.rows; r++) {
-          for (let c = 0; c < SDK_CONFIG.board.columns; c++) {
-            if (this.grid[r][c].value !== null) {
-              activeCells.push(this.grid[r][c]);
-            }
-          }
-        }
-        
-        const idx1 = activeCells.findIndex(cell => cell.row === r1 && cell.col === c1);
-        const idx2 = activeCells.findIndex(cell => cell.row === r2 && cell.col === c2);
-        
-        if (idx1 === -1 || idx2 === -1) return false;
-        
-        return Math.abs(idx1 - idx2) === 1;
+        const path = this.inspectPath({ row: r1, col: c1 }, { row: r2, col: c2 });
+        return path.result;
       },
       
       clearPair(r1, c1, r2, c2) {
         const val1 = this.grid[r1][c1].value;
         const val2 = this.grid[r2][c2].value;
         
+        // Calculate row clear bonuses BEFORE clearing
+        const row1BeforeCount = this.grid[r1].filter(c => c.value !== null).length;
+        const row2BeforeCount = this.grid[r2].filter(c => c.value !== null).length;
+        
+        // Clear cells
         this.grid[r1][c1].value = null;
         this.grid[r2][c2].value = null;
         
+        const row1AfterCount = this.grid[r1].filter(c => c.value !== null).length;
+        const row2AfterCount = this.grid[r2].filter(c => c.value !== null).length;
+        
+        let rowClearBonus = 0;
+        if (row1BeforeCount > 0 && row1AfterCount === 0) rowClearBonus += 10;
+        if (r1 !== r2 && row2BeforeCount > 0 && row2AfterCount === 0) rowClearBonus += 10;
+        
+        // Match base score
+        let matchScore = 0;
+        if (val1 === val2) {
+          matchScore += 10;
+        } else if (val1 + val2 === 10) {
+          matchScore += 15;
+        }
+        
+        // Path bonuses
+        const path = this.inspectPath({ row: r1, col: c1 }, { row: r2, col: c2 });
+        if (path.pathType === "diagonal") matchScore += 5;
+        if (path.pathType === "wrap") matchScore += 5;
+        
+        // Add row clear bonus
+        matchScore += rowClearBonus;
+        
+        // Audio
         AudioEngine.playCorrect();
         
         const elA = document.getElementById(`cell-${r1}-${c1}`);
@@ -1839,35 +1878,28 @@
         ParticleEngine.spawnSparkles(centerX_A, centerY_A, "#ffaa00");
         ParticleEngine.spawnSparkles(centerX_B, centerY_B, "#ffaa00");
         
-        this.spawnFloatingScore(`+10`, (centerX_A + centerX_B)/2, (centerY_A + centerY_B)/2);
+        this.spawnFloatingScore(`+${matchScore}`, (centerX_A + centerX_B)/2, (centerY_A + centerY_B)/2);
         this.spawnFloatingScore(`+50 XP`, (centerX_A + centerX_B)/2 + 20, (centerY_A + centerY_B)/2 - 15, true);
         
         EmotionEngine.spawnEmoji((rectA.left + rectB.left)/2 - appRect.left + rectA.width/2, (rectA.top + rectB.top)/2 - appRect.top, "positive");
         
-        ScoreEngine.addScore(10);
+        ScoreEngine.addScore(matchScore);
         AIAnalyzer.addEnergy(10);
         
-        setTimeout(() => this.applyGravity(), 120);
+        // Check board cleared win condition
+        const boardCleared = this.grid.every(row => row.every(cell => cell.value === null));
+        if (boardCleared) {
+          ScoreEngine.addScore(100);
+          this.spawnFloatingScore(`+100 WIN!`, (centerX_A + centerX_B)/2, (centerY_A + centerY_B)/2 - 30);
+          setTimeout(() => this.completeGame(), 600);
+        }
+        
+        // Redraw board to reflect empty cells (replacing applyGravity)
+        this.renderBoard();
       },
       
       applyGravity() {
-        const cols = SDK_CONFIG.board.columns;
-        const rows = SDK_CONFIG.board.rows;
-        
-        for (let c = 0; c < cols; c++) {
-          let writeRow = rows - 1;
-          for (let readRow = rows - 1; readRow >= 0; readRow--) {
-            if (this.grid[readRow][c].value !== null) {
-              this.grid[writeRow][c].value = this.grid[readRow][c].value;
-              if (writeRow !== readRow) {
-                this.grid[readRow][c].value = null;
-              }
-              writeRow--;
-            }
-          }
-        }
-        
-        this.renderBoard();
+        // No-op: Gravity disabled to match original game mechanics
       },
       
       triggerAngryMode() {
