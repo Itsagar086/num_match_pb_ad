@@ -757,16 +757,18 @@
         <span class="score-val" id="score-label">0</span>
       </div>
 
-      <!-- AI Performance Analyzer -->
-      <div class="ai-analyzer">
+      <!-- IQ Progress System -->
+      <div class="ai-analyzer" id="iq-panel">
         <div class="ai-badge tier-learner" id="ai-badge-tier">
-          <span class="ai-dot">🟢</span>
-          <span id="ai-tier-text">Quick Learner</span>
+          <span class="ai-dot">🧠</span>
+          <span id="ai-tier-text">IQ LEVEL</span>
         </div>
-        <div class="ai-energy-wrapper">
-          <div class="ai-energy-bar" id="ai-energy-gauge"></div>
+        <div class="ai-energy-wrapper" style="position:relative;">
+          <div class="ai-energy-bar" id="ai-energy-gauge" style="width: 10%;"></div>
+          <!-- Centered text overlay inside bar wrapper for current IQ Score -->
+          <div id="iq-score-text" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; font-weight:800; color:#000000; pointer-events:none; z-index:10; font-family:'Outfit', sans-serif;">IQ 10</div>
         </div>
-        <div class="ai-emoji" id="ai-emoji-face">😀</div>
+        <div class="ai-emoji" id="ai-emoji-face" style="font-size:11px; font-weight:800; text-transform:uppercase; font-family:'Outfit', sans-serif;">Beginner</div>
       </div>
     </div>
 
@@ -829,6 +831,8 @@
             <span class="stat-value" id="stat-xp">900 XP</span>
           </div>
         </div>
+
+        <div id="outro-subtext" style="font-size:13px; font-weight:600; text-align:center; color:#000000; margin-top:2px; margin-bottom:8px; opacity:0.8; font-family:'Outfit', sans-serif;">Think you can reach Master Mind?<br>Install the full game to continue.</div>
 
         <!-- Call to Action Main Button -->
         <button class="cta-btn shine" id="install-btn">
@@ -1292,6 +1296,9 @@
           AudioEngine.playWrong();
         }
         
+        // Deduct IQ on miss
+        IQProgressSystem.registerMiss();
+        
         AnalyticsEngine.track("wrong_match", {
           accuracy: this.getAccuracyPercent(),
           consecutiveMisses: GameEngine.consecutiveMisses
@@ -1374,71 +1381,148 @@
     };
 
     // ==========================================
-    // 8. AI PERFORMANCE ANALYZER
+    // 8. IQ PROGRESS SYSTEM
     // ==========================================
-    const AIAnalyzer = {
-      energy: 50,
-      visualEnergy: 50,
-      tierBadge: null,
-      tierText: null,
-      energyGauge: null,
-      emojiFace: null,
+    const IQProgressSystem = {
+      iq: 10,
+      visualIq: 10,
+      consecutiveCorrect: 0,
+      lastMatchTime: 0,
       
       init() {
-        this.tierBadge = document.getElementById("ai-badge-tier");
-        this.tierText = document.getElementById("ai-tier-text");
-        this.energyGauge = document.getElementById("ai-energy-gauge");
-        this.emojiFace = document.getElementById("ai-emoji-face");
-        this.updateVisuals();
+        this.iq = 10;
+        this.visualIq = 10;
+        this.consecutiveCorrect = 0;
+        this.lastMatchTime = 0;
+        this.animateIq();
       },
       
-      addEnergy(amount) {
-        this.energy = Math.min(100, this.energy + amount);
-        this.animateGauge();
+      addMatch(matchType, pathType) {
+        this.consecutiveCorrect++;
+        
+        // Base IQ points
+        let iqGain = 5;
+        
+        // Match type bonus
+        if (matchType === "sum10") {
+          iqGain += 2;
+        }
+        
+        // Path bonus
+        if (pathType === "diagonal" || pathType === "wrap") {
+          iqGain += 3;
+        }
+        
+        // Combo streak bonus
+        const streak = ScoreEngine.streak;
+        if (streak > 1) {
+          iqGain += streak * 2;
+        }
+        
+        // Speed bonus
+        const now = Date.now();
+        if (this.lastMatchTime > 0) {
+          const sec = (now - this.lastMatchTime) / 1000;
+          if (sec < 3.0) {
+            iqGain += 4; // fast match bonus
+          } else if (sec < 6.0) {
+            iqGain += 2;
+          }
+        }
+        this.lastMatchTime = now;
+        
+        this.iq = Math.min(100, this.iq + iqGain);
+        this.animateIq();
       },
       
-      deductEnergy(amount) {
-        this.energy = Math.max(0, this.energy - amount);
-        this.animateGauge();
+      registerMiss() {
+        this.consecutiveCorrect = 0;
+        this.iq = Math.max(0, this.iq - 4);
+        this.animateIq();
       },
       
-      animateGauge() {
+      getRank(score = this.iq) {
+        if (score <= 20) return { rank: "Beginner", emoji: "🟢" };
+        if (score <= 40) return { rank: "Observer", emoji: "🔵" };
+        if (score <= 60) return { rank: "Logical Thinker", emoji: "🟣" };
+        if (score <= 80) return { rank: "Puzzle Expert", emoji: "🟠" };
+        return { rank: "Master Mind", emoji: "👑" };
+      },
+      
+      animateIq() {
+        const gauge = document.getElementById("ai-energy-gauge");
+        const valText = document.getElementById("iq-score-text");
+        const rankText = document.getElementById("ai-emoji-face");
+        const dotSpan = document.querySelector("#ai-badge-tier .ai-dot");
+        
         const step = () => {
-          const diff = this.energy - this.visualEnergy;
-          if (Math.abs(diff) > 0.5) {
-            this.visualEnergy += diff * 0.12;
-            this.energyGauge.style.width = `${this.visualEnergy}%`;
-            this.updateVisuals();
+          const diff = this.iq - this.visualIq;
+          if (Math.abs(diff) > 0.2) {
+            const oldVisual = this.visualIq;
+            this.visualIq += diff * 0.1;
+            
+            // Check if we passed a level boundary to trigger level up FX
+            const oldRankObj = this.getRank(oldVisual);
+            const newRankObj = this.getRank(this.visualIq);
+            if (newRankObj.rank !== oldRankObj.rank && this.visualIq > oldVisual) {
+              this.triggerLevelUpEffects(newRankObj.rank);
+            }
+            
+            if (gauge) gauge.style.width = `${this.visualIq}%`;
+            if (valText) valText.innerText = `IQ ${Math.round(this.visualIq)}`;
+            
+            const currentRankObj = this.getRank(this.visualIq);
+            if (rankText) rankText.innerText = currentRankObj.rank;
+            if (dotSpan) dotSpan.innerText = currentRankObj.emoji;
+            
             requestAnimationFrame(step);
           } else {
-            this.visualEnergy = this.energy;
-            this.energyGauge.style.width = `${this.energy}%`;
-            this.updateVisuals();
+            this.visualIq = this.iq;
+            if (gauge) gauge.style.width = `${this.iq}%`;
+            if (valText) valText.innerText = `IQ ${Math.round(this.iq)}`;
+            
+            const currentRankObj = this.getRank(this.iq);
+            if (rankText) rankText.innerText = currentRankObj.rank;
+            if (dotSpan) dotSpan.innerText = currentRankObj.emoji;
           }
         };
         requestAnimationFrame(step);
       },
       
-      updateVisuals() {
-        // Skip normal updates if currently in Angry Mode
-        if (GameEngine && GameEngine.isAngryMode) return;
+      triggerLevelUpEffects(newRank) {
+        // Floating text options
+        const levelUpPhrases = [
+          "🧠 IQ Increased",
+          "Brilliant!",
+          "Excellent Logic!",
+          "Genius Move!",
+          "Master Thinker!"
+        ];
+        const phrase = levelUpPhrases[Math.floor(Math.random() * levelUpPhrases.length)];
         
-        if (this.visualEnergy < 40) {
-          this.tierText.innerText = "Quick Learner";
-          this.tierBadge.className = "ai-badge tier-learner";
-          this.tierBadge.querySelector(".ai-dot").innerText = "🟢";
-          this.emojiFace.innerText = "😕";
-        } else if (this.visualEnergy < 78) {
-          this.tierText.innerText = "Puzzle Solver";
-          this.tierBadge.className = "ai-badge tier-solver";
-          this.tierBadge.querySelector(".ai-dot").innerText = "🔵";
-          this.emojiFace.innerText = "😎";
-        } else {
-          this.tierText.innerText = "Math Master";
-          this.tierBadge.className = "ai-badge tier-master";
-          this.tierBadge.querySelector(".ai-dot").innerText = "🟣";
-          this.emojiFace.innerText = "🤩";
-        }
+        // Spawn floating text near IQ progress panel
+        const appRect = document.getElementById("app-container").getBoundingClientRect();
+        const panel = document.getElementById("iq-panel");
+        if (!panel) return;
+        const panelRect = panel.getBoundingClientRect();
+        const px = panelRect.left - appRect.left + panelRect.width / 2;
+        const py = panelRect.top - appRect.top + panelRect.height / 2;
+        
+        GameEngine.spawnFloatingScore(phrase, px, py - 20, true);
+        
+        // Soft pulse and glow animation
+        panel.classList.add("pulse");
+        panel.style.boxShadow = "0 0 15px #ffaa00";
+        setTimeout(() => {
+          panel.classList.remove("pulse");
+          panel.style.boxShadow = "";
+        }, 600);
+        
+        // Particle burst
+        ParticleEngine.spawn(px, py, "#ffaa00", 15, "sparkle");
+        
+        // Play success tone
+        AudioEngine.playTone(880, "sine", 0.2);
       }
     };
 
@@ -1571,7 +1655,6 @@
               } else {
                 // Mismatch -> Clear selection 1, highlight selection 2
                 ScoreEngine.registerMiss();
-                AIAnalyzer.deductEnergy(15);
                 this.triggerMismatchEffects(cellEl);
                 
                 this.selectedStartCell.classList.remove("selected");
@@ -1727,13 +1810,21 @@
         EmotionEngine.spawnEmoji((rectA.left + rectB.left)/2 - appRect.left + rectA.width/2, (rectA.top + rectB.top)/2 - appRect.top, "positive");
         
         ScoreEngine.addScore(matchScore);
-        AIAnalyzer.addEnergy(10);
+        
+        // Update IQ Level progress
+        const matchType = (val1 === val2) ? "equal" : "sum10";
+        IQProgressSystem.addMatch(matchType, path.pathType);
         
         // Redraw board to reflect empty cells
         this.renderBoard();
         
-        // In this playable ad, matching the first pair immediately wins the game!
-        setTimeout(() => this.completeGame(), 600);
+        // Check board cleared win condition
+        const boardCleared = this.grid.every(row => row.every(cell => cell.value === null));
+        if (boardCleared) {
+          ScoreEngine.addScore(100);
+          this.spawnFloatingScore(`+100 WIN!`, (centerX_A + centerX_B)/2, (centerY_A + centerY_B)/2 - 30);
+          setTimeout(() => this.completeGame(), 600);
+        }
       },
       
       applyGravity() {
@@ -1784,8 +1875,9 @@
         tierBadge.style.background = "";
         tierBadge.style.border = "";
         tierText.style.color = "";
+        tierText.innerText = "IQ LEVEL";
         
-        AIAnalyzer.updateVisuals();
+        IQProgressSystem.animateIq();
         
         // Calm victory sound recovery
         AudioEngine.playVictory();
@@ -1863,8 +1955,8 @@
         document.getElementById("stat-max-combo").innerText = `x${maxStreak}`;
         document.getElementById("stat-xp").innerText = `${xpEarned} XP`;
         
-        const currentTier = document.getElementById("ai-tier-text").innerText;
-        document.getElementById("outro-tier-label").innerText = currentTier;
+        const rankObj = IQProgressSystem.getRank();
+        document.getElementById("outro-tier-label").innerText = `🧠 IQ ${Math.round(IQProgressSystem.iq)} - ${rankObj.rank}`;
         
         this.overlay.classList.add("active");
         ParticleEngine.spawnConfetti();
@@ -1873,7 +1965,8 @@
           score: finalScore,
           accuracy,
           maxStreak,
-          skillTier: currentTier
+          iq: IQProgressSystem.iq,
+          iqRank: rankObj.rank
         });
       },
       
@@ -1998,7 +2091,7 @@
       EmotionEngine.init();
       ScoreEngine.init();
       ComboSystem.init();
-      AIAnalyzer.init();
+      IQProgressSystem.init();
       GameEngine.init();
       CTAEngine.init();
       
