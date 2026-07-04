@@ -780,8 +780,8 @@
       <!-- Grid Container -->
       <div class="board-container" id="grid-board"></div>
       
-      <!-- SVG overlay for rendering lines -->
-      <svg id="connector-svg">
+      <!-- SVG overlay hidden - connection line removed to prevent coordinate glitch -->
+      <svg id="connector-svg" style="display:none;">
         <line id="connection-line" class="connector-line" x1="0" y1="0" x2="0" y2="0" style="display:none;" />
       </svg>
     </div>
@@ -1797,15 +1797,7 @@
         ParticleEngine.spawnSparkles(centerX_A, centerY_A, "#ffaa00");
         ParticleEngine.spawnSparkles(centerX_B, centerY_B, "#ffaa00");
         
-        // Draw path line briefly
-        this.connectionLine.setAttribute("x1", centerX_A);
-        this.connectionLine.setAttribute("y1", centerY_A);
-        this.connectionLine.setAttribute("x2", centerX_B);
-        this.connectionLine.setAttribute("y2", centerY_B);
-        this.connectionLine.style.display = "block";
-        setTimeout(() => {
-          this.connectionLine.style.display = "none";
-        }, 250);
+        // Connection line removed — match is shown via particles, score pop, and sound
         
         this.spawnFloatingScore(`+${matchScore}`, (centerX_A + centerX_B)/2, (centerY_A + centerY_B)/2);
         this.spawnFloatingScore(`+50 XP`, (centerX_A + centerX_B)/2 + 20, (centerY_A + centerY_B)/2 - 15, true);
