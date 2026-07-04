@@ -297,12 +297,12 @@
     }
 
     .grid-cell.selected {
-      background-color: #fbe7ce; /* Soft Orange Match Highlight matching 3x3 icon */
+      background-color: #fbe7ce; /* Soft Orange Match Highlight */
       color: #ff6600;
       border-color: #ffaa00;
-      box-shadow: 0 0 10px var(--primary-glow);
-      z-index: 10;
-      transform: scale(1.05);
+      box-shadow: inset 0 0 0 2.5px #ffaa00, 0 0 8px var(--primary-glow);
+      z-index: 2;
+      /* No scale() — prevents highlight bleeding outside grid border */
     }
 
     .grid-cell.empty {
@@ -676,69 +676,69 @@
       filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
     }
 
-    /* --- ANGRY MODE BRANDING STYLE OVERRIDES --- */
+    /* --- SAD MODE BRANDING STYLE OVERRIDES (replaces angry-mode) --- */
     #app-container.angry-mode {
-      --app-bg: #1e0505;
-      --grid-border-color: #ff3333;
-      box-shadow: 0 10px 40px rgba(255, 0, 0, 0.25);
+      --app-bg: #e8eef5;
+      --grid-border-color: #7090b0;
+      box-shadow: 0 10px 40px rgba(70, 100, 140, 0.2);
     }
 
     #app-container.angry-mode .header-panel,
     #app-container.angry-mode .gameplay-area,
     #app-container.angry-mode .footer-panel {
-      background-color: #1e0505 !important;
-      color: #ff3333 !important;
+      background-color: #e8eef5 !important;
+      color: #4a6480 !important;
     }
 
     #app-container.angry-mode .separator-line {
-      background-color: #ff3333 !important;
+      background-color: #7090b0 !important;
     }
 
     #app-container.angry-mode .mission-title,
     #app-container.angry-mode .target-title {
-      color: #ff3333 !important;
+      color: #4a6480 !important;
     }
 
     #app-container.angry-mode .score-capsule {
-      background: #2d0d0d !important;
-      border-color: #ff3333 !important;
-      color: #ff3333 !important;
-      box-shadow: 0 3px 0 #ff3333 !important;
+      background: #d0dce8 !important;
+      border-color: #7090b0 !important;
+      color: #4a6480 !important;
+      box-shadow: 0 3px 0 #7090b0 !important;
     }
 
     #app-container.angry-mode .ai-analyzer {
-      background: #2d0d0d !important;
-      border-color: #ff3333 !important;
-      box-shadow: 0 3px 0 #ff3333 !important;
+      background: #d0dce8 !important;
+      border-color: #7090b0 !important;
+      box-shadow: 0 3px 0 #7090b0 !important;
     }
 
     #app-container.angry-mode .ai-energy-bar {
-      background: linear-gradient(90deg, #ef4444, #ff0000) !important;
+      background: linear-gradient(90deg, #7090b0, #a0b8d0) !important;
     }
 
     #app-container.angry-mode .grid-cell {
-      background-color: #2d0d0d !important;
-      border-color: #ff3333 !important;
-      color: #ff6666 !important;
+      background-color: #d8e4ef !important;
+      border-color: #7090b0 !important;
+      color: #4a6480 !important;
     }
 
     #app-container.angry-mode .grid-cell.selected {
-      background-color: #ff3333 !important;
-      color: #ffffff !important;
-      border-color: #ffffff !important;
-      box-shadow: 0 0 12px rgba(255, 51, 51, 0.8) !important;
+      background-color: #b8cfe0 !important;
+      color: #1a3650 !important;
+      border-color: #4a6480 !important;
+      box-shadow: inset 0 0 0 2.5px #4a6480, 0 0 8px rgba(70, 100, 128, 0.4) !important;
     }
 
     #app-container.angry-mode .footer-info {
-      color: #ff3333 !important;
+      color: #4a6480 !important;
     }
 
     #app-container.angry-mode .control-btn {
-      color: #ff3333 !important;
+      color: #4a6480 !important;
     }
 
     #app-container.angry-mode #connector-svg .connector-line {
-      stroke: #ff3333 !important;
+      stroke: #7090b0 !important;
     }
   </style>
 </head>
@@ -1835,30 +1835,29 @@
         if (this.isAngryMode) return;
         this.isAngryMode = true;
         
-        // Trigger crimson-black container overrides
+        // Trigger soft-blue sad-mode container overrides
         document.getElementById("app-container").classList.add("angry-mode");
         
-        // Update AI badge/labels to critical warnings
+        // Update IQ badge/labels to sad-state indicators
         const tierBadge = document.getElementById("ai-badge-tier");
         const tierText = document.getElementById("ai-tier-text");
         const emojiFace = document.getElementById("ai-emoji-face");
         
-        tierBadge.className = "ai-badge tier-learner"; // custom overrides applied by CSS
-        tierBadge.style.background = "rgba(239, 68, 68, 0.15)";
-        tierBadge.style.border = "1px solid #ff3333";
-        tierText.innerText = "UNSTABLE STATE";
-        tierText.style.color = "#ff3333";
-        tierBadge.querySelector(".ai-dot").innerText = "🔴";
-        emojiFace.innerText = "🤬";
+        tierBadge.style.background = "rgba(112, 144, 176, 0.15)";
+        tierBadge.style.border = "1px solid #7090b0";
+        tierText.innerText = "NEEDS FOCUS";
+        tierText.style.color = "#4a6480";
+        tierBadge.querySelector(".ai-dot").innerText = "😢";
+        emojiFace.innerText = "Oops...";
         
-        // Deep buzzer warning
-        AudioEngine.playAngryWarning();
+        // Soft descending tone
+        AudioEngine.playWrong();
         
-        // Spawn floating critical banner
+        // Spawn floating soft banner
         const boardRect = this.boardEl.getBoundingClientRect();
-        this.spawnFloatingScore("😡 ANGRY MODE", boardRect.width/2, boardRect.height/2);
+        this.spawnFloatingScore("😢 Take a breath...", boardRect.width/2, boardRect.height/2);
         
-        AnalyticsEngine.track("angry_mode_entered");
+        AnalyticsEngine.track("sad_mode_entered");
       },
       
       clearAngryMode() {
