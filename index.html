@@ -300,9 +300,9 @@
       background-color: #fbe7ce; /* Soft Orange Match Highlight */
       color: #ff6600;
       border-color: #ffaa00;
-      box-shadow: inset 0 0 0 2.5px #ffaa00, 0 0 8px var(--primary-glow);
+      /* Only inset shadow — no outer glow that bleeds past grid border */
+      box-shadow: inset 0 0 0 2.5px #ffaa00;
       z-index: 2;
-      /* No scale() — prevents highlight bleeding outside grid border */
     }
 
     .grid-cell.empty {
@@ -1306,7 +1306,7 @@
       },
       
       getAccuracyPercent() {
-        if (this.accuracy.total === 0) return "100%";
+        if (this.accuracy.total === 0) return "--";
         return `${Math.round((this.accuracy.correct / this.accuracy.total) * 100)}%`;
       },
       
@@ -1640,6 +1640,8 @@
             if (cellEl === this.selectedStartCell) {
               cellEl.classList.remove("selected");
               this.selectedStartCell = null;
+              // Hide connection line when deselecting
+              this.connectionLine.style.display = "none";
               AudioEngine.playClick();
               AnalyticsEngine.track("cell_deselected");
             } else {
@@ -1653,7 +1655,8 @@
                 this.clearPair(rA, cA, rB, cB);
                 this.selectedStartCell = null;
               } else {
-                // Mismatch -> Clear selection 1, highlight selection 2
+                // Mismatch -> hide any lingering connection line, clear selection 1, highlight selection 2
+                this.connectionLine.style.display = "none";
                 ScoreEngine.registerMiss();
                 this.triggerMismatchEffects(cellEl);
                 
