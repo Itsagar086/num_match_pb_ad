@@ -309,6 +309,7 @@
       background-color: transparent !important;
       border-color: transparent !important;
       color: transparent !important;
+      box-shadow: none !important; /* prevent selected glow leaking onto cleared cells */
       pointer-events: none;
       z-index: 1;
     }
@@ -1809,6 +1810,10 @@
         // Update IQ Level progress
         const matchType = (val1 === val2) ? "equal" : "sum10";
         IQProgressSystem.addMatch(matchType, path.pathType);
+        
+        // IMPORTANT: clear selectedStartCell BEFORE renderBoard so the
+        // newly-emptied cell doesn't get the selected box-shadow re-applied
+        this.selectedStartCell = null;
         
         // Redraw board to reflect empty cells
         this.renderBoard();
