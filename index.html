@@ -662,36 +662,11 @@
       z-index: 50;
       transform: translate(-50%, -50%);
       opacity: 0;
-      transition: opacity 0.5s ease;
+      transition: opacity 0.3s ease, left 0.4s ease, top 0.4s ease, transform 0.2s ease;
     }
 
     .tutorial-hand.active {
       opacity: 1;
-      animation: handDrag 3s ease infinite;
-    }
-
-    @keyframes handDrag {
-      0% {
-        top: 34.6%; 
-        left: 50%;
-        transform: translate(-50%, -50%) scale(1.1);
-      }
-      20% {
-        top: 34.6%;
-        left: 50%;
-        transform: translate(-50%, -50%) scale(0.9);
-      }
-      50% {
-        top: 42.3%; 
-        left: 61.1%;
-        transform: translate(-50%, -50%) scale(0.9);
-      }
-      70%, 100% {
-        top: 42.3%;
-        left: 61.1%;
-        transform: translate(-50%, -50%) scale(1.1);
-        opacity: 0;
-      }
     }
 
     /* SVG Hand drawing */
@@ -1512,7 +1487,7 @@
         
         // Start hand indicator overlay
         if (!this.tutorialCompleted) {
-          document.getElementById("tutorial-indicator").classList.add("active");
+          setTimeout(() => TutorialEngine.start(), 300);
         }
       },
       
@@ -1556,202 +1531,60 @@
       },
       
       setupInputHandlers() {
-        const handleStart = (e) => {
+        const handleCellClick = (e) => {
           if (!this.gameActive) return;
           AudioEngine.init();
           
           const cellEl = e.target.closest(".grid-cell");
           if (!cellEl || cellEl.classList.contains("empty")) return;
           
-          this.isDrawing = true;
-          this.dragActive = false;
-          
-          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-          this.dragStartPos = { x: clientX, y: clientY };
-          
-          // Selection initiation
-          if (this.selectedStartCell) {
-            // Already have a start cell selected via tap-to-select
-            if (cellEl !== this.selectedStartCell) {
-              this.selectedCells = [this.selectedStartCell, cellEl];
-              cellEl.classList.add("selected");
-              
-              const startCenter = this.getCellCenter(this.selectedStartCell);
-              const targetCenter = this.getCellCenter(cellEl);
-              this.connectionLine.setAttribute("x1", startCenter.x);
-              this.connectionLine.setAttribute("y1", startCenter.y);
-              this.connectionLine.setAttribute("x2", targetCenter.x);
-              this.connectionLine.setAttribute("y2", targetCenter.y);
-              this.connectionLine.style.display = "block";
-            } else {
-              this.selectedCells = [cellEl];
-            }
-          } else {
-            this.selectedCells = [cellEl];
-            cellEl.classList.add("selected");
-            
-            const coords = this.getCellCenter(cellEl);
-            this.connectionLine.setAttribute("x1", coords.x);
-            this.connectionLine.setAttribute("y1", coords.y);
-            this.connectionLine.setAttribute("x2", coords.x);
-            this.connectionLine.setAttribute("y2", coords.y);
-            this.connectionLine.style.display = "block";
-          }
-          
           if (!AnalyticsEngine.firstInteraction) {
             AnalyticsEngine.firstInteraction = true;
             AnalyticsEngine.track("first_interaction");
-            document.getElementById("tutorial-indicator").classList.remove("active");
             this.tutorialCompleted = true;
-          }
-        };
-        
-        const handleMove = (e) => {
-          if (!this.isDrawing || this.selectedCells.length === 0) return;
-          
-          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-          
-          const dx = clientX - this.dragStartPos.x;
-          const dy = clientY - this.dragStartPos.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          
-          if (dist > 10) {
-            this.dragActive = true;
+            TutorialEngine.stop();
           }
           
-          if (this.dragActive) {
-            const boardRect = this.boardEl.getBoundingClientRect();
-            const localX = clientX - boardRect.left;
-            const localY = clientY - boardRect.top;
-            
-            const originCell = this.selectedStartCell || this.selectedCells[0];
-            const startCenter = this.getCellCenter(originCell);
-            this.connectionLine.setAttribute("x1", startCenter.x);
-            this.connectionLine.setAttribute("y1", startCenter.y);
-            this.connectionLine.setAttribute("x2", localX);
-            this.connectionLine.setAttribute("y2", localY);
-            this.connectionLine.style.display = "block";
-            
-            const element = document.elementFromPoint(clientX, clientY);
-            const cellEl = element ? element.closest(".grid-cell") : null;
-            
-            if (cellEl && !cellEl.classList.contains("empty") && cellEl !== originCell) {
-              const targetCenter = this.getCellCenter(cellEl);
-              this.connectionLine.setAttribute("x2", targetCenter.x);
-              this.connectionLine.setAttribute("y2", targetCenter.y);
-              
-              if (this.selectedCells.length < 2) {
-                this.selectedCells = [originCell, cellEl];
-                cellEl.classList.add("selected");
-              } else if (this.selectedCells[1] !== cellEl) {
-                this.selectedCells[1].classList.remove("selected");
-                this.selectedCells[1] = cellEl;
-                cellEl.classList.add("selected");
-              }
+          if (!this.selectedStartCell) {
+            // Select First Cell
+            this.selectedStartCell = cellEl;
+            cellEl.classList.add("selected");
+            AudioEngine.playClick();
+            AnalyticsEngine.track("cell_selected", { row: cellEl.dataset.row, col: cellEl.dataset.col });
+          } else {
+            // Tap Same Cell -> Deselect
+            if (cellEl === this.selectedStartCell) {
+              cellEl.classList.remove("selected");
+              this.selectedStartCell = null;
+              AudioEngine.playClick();
+              AnalyticsEngine.track("cell_deselected");
             } else {
-              // Dragged off targets
-              if (this.selectedCells.length === 2) {
-                this.selectedCells[1].classList.remove("selected");
-                this.selectedCells.pop();
-              }
-            }
-          }
-        };
-        
-        const handleEnd = () => {
-          if (!this.isDrawing) return;
-          this.isDrawing = false;
-          this.connectionLine.style.display = "none";
-          
-          const originCell = this.selectedStartCell || this.selectedCells[0];
-          
-          if (this.dragActive) {
-            // Drag Mode Complete
-            if (this.selectedCells.length === 2) {
-              const cellA = this.selectedCells[0];
-              const cellB = this.selectedCells[1];
-              
-              const rA = parseInt(cellA.dataset.row);
-              const cA = parseInt(cellA.dataset.col);
-              const rB = parseInt(cellB.dataset.row);
-              const cB = parseInt(cellB.dataset.col);
+              // Tap Second Cell -> Match
+              const rA = parseInt(this.selectedStartCell.dataset.row);
+              const cA = parseInt(this.selectedStartCell.dataset.col);
+              const rB = parseInt(cellEl.dataset.row);
+              const cB = parseInt(cellEl.dataset.col);
               
               if (this.checkMatch(rA, cA, rB, cB)) {
                 this.clearPair(rA, cA, rB, cB);
                 this.selectedStartCell = null;
               } else {
+                // Mismatch -> Clear selection 1, highlight selection 2
                 ScoreEngine.registerMiss();
                 AIAnalyzer.deductEnergy(15);
-                this.triggerMismatchEffects(cellB);
+                this.triggerMismatchEffects(cellEl);
                 
-                cellA.classList.remove("selected");
-                cellB.classList.remove("selected");
-                this.selectedStartCell = null;
-              }
-            } else {
-              originCell.classList.remove("selected");
-              if (this.selectedStartCell) {
                 this.selectedStartCell.classList.remove("selected");
-                this.selectedStartCell = null;
-              }
-            }
-          } else {
-            // Tap/Click Mode Complete
-            const cellEl = this.selectedCells[this.selectedCells.length - 1];
-            
-            if (!this.selectedStartCell) {
-              // Select First Cell
-              this.selectedStartCell = cellEl;
-              cellEl.classList.add("selected");
-              AudioEngine.playClick();
-              AnalyticsEngine.track("cell_selected", { row: cellEl.dataset.row, col: cellEl.dataset.col });
-            } else {
-              // Tap Same Cell -> Deselect
-              if (cellEl === this.selectedStartCell) {
-                cellEl.classList.remove("selected");
-                this.selectedStartCell = null;
+                this.selectedStartCell = cellEl;
+                cellEl.classList.add("selected");
                 AudioEngine.playClick();
-                AnalyticsEngine.track("cell_deselected");
-              } else {
-                // Tap Second Cell -> Match
-                const rA = parseInt(this.selectedStartCell.dataset.row);
-                const cA = parseInt(this.selectedStartCell.dataset.col);
-                const rB = parseInt(cellEl.dataset.row);
-                const cB = parseInt(cellEl.dataset.col);
-                
-                if (this.checkMatch(rA, cA, rB, cB)) {
-                  this.clearPair(rA, cA, rB, cB);
-                  this.selectedStartCell = null;
-                } else {
-                  // Mismatch -> Clear selection 1, highlight selection 2
-                  ScoreEngine.registerMiss();
-                  AIAnalyzer.deductEnergy(15);
-                  this.triggerMismatchEffects(cellEl);
-                  
-                  this.selectedStartCell.classList.remove("selected");
-                  this.selectedStartCell = cellEl;
-                  cellEl.classList.add("selected");
-                  AudioEngine.playClick();
-                }
               }
             }
           }
-          
-          this.selectedCells = [];
-          this.dragActive = false;
         };
         
-        // Listeners for mouse
-        this.boardEl.addEventListener("mousedown", handleStart);
-        window.addEventListener("mousemove", handleMove);
-        window.addEventListener("mouseup", handleEnd);
-        
-        // Listeners for touch
-        this.boardEl.addEventListener("touchstart", handleStart, { passive: true });
-        window.addEventListener("touchmove", handleMove, { passive: true });
-        window.addEventListener("touchend", handleEnd);
+        // Add click listener to board (event delegation)
+        this.boardEl.addEventListener("click", handleCellClick);
       },
       
       valueAt(r, c) {
@@ -1878,6 +1711,16 @@
         ParticleEngine.spawnSparkles(centerX_A, centerY_A, "#ffaa00");
         ParticleEngine.spawnSparkles(centerX_B, centerY_B, "#ffaa00");
         
+        // Draw path line briefly
+        this.connectionLine.setAttribute("x1", centerX_A);
+        this.connectionLine.setAttribute("y1", centerY_A);
+        this.connectionLine.setAttribute("x2", centerX_B);
+        this.connectionLine.setAttribute("y2", centerY_B);
+        this.connectionLine.style.display = "block";
+        setTimeout(() => {
+          this.connectionLine.style.display = "none";
+        }, 250);
+        
         this.spawnFloatingScore(`+${matchScore}`, (centerX_A + centerX_B)/2, (centerY_A + centerY_B)/2);
         this.spawnFloatingScore(`+50 XP`, (centerX_A + centerX_B)/2 + 20, (centerY_A + centerY_B)/2 - 15, true);
         
@@ -1886,16 +1729,11 @@
         ScoreEngine.addScore(matchScore);
         AIAnalyzer.addEnergy(10);
         
-        // Check board cleared win condition
-        const boardCleared = this.grid.every(row => row.every(cell => cell.value === null));
-        if (boardCleared) {
-          ScoreEngine.addScore(100);
-          this.spawnFloatingScore(`+100 WIN!`, (centerX_A + centerX_B)/2, (centerY_A + centerY_B)/2 - 30);
-          setTimeout(() => this.completeGame(), 600);
-        }
-        
-        // Redraw board to reflect empty cells (replacing applyGravity)
+        // Redraw board to reflect empty cells
         this.renderBoard();
+        
+        // In this playable ad, matching the first pair immediately wins the game!
+        setTimeout(() => this.completeGame(), 600);
       },
       
       applyGravity() {
@@ -2049,6 +1887,104 @@
         } else {
           window.open(url, "_blank");
         }
+      }
+    };
+
+    // ==========================================
+    // 10.5 TUTORIAL ENGINE (Dynamic Tap Animation)
+    // ==========================================
+    const TutorialEngine = {
+      intervalId: null,
+      active: false,
+      
+      start() {
+        if (GameEngine.tutorialCompleted) return;
+        this.active = true;
+        const hand = document.getElementById("tutorial-indicator");
+        if (!hand) return;
+        hand.style.opacity = "0";
+        hand.style.display = "block";
+        
+        let step = 0;
+        const runStep = () => {
+          if (!this.active || GameEngine.tutorialCompleted) {
+            this.stop();
+            return;
+          }
+          
+          const cellA = document.getElementById("cell-0-6");
+          const cellB = document.getElementById("cell-0-7");
+          
+          if (!cellA || !cellB) return;
+          
+          // Get centers relative to the app container
+          const rectA = cellA.getBoundingClientRect();
+          const rectB = cellB.getBoundingClientRect();
+          const appRect = document.getElementById("app-container").getBoundingClientRect();
+          
+          const xA = rectA.left - appRect.left + rectA.width / 2;
+          const yA = rectA.top - appRect.top + rectA.height / 2;
+          const xB = rectB.left - appRect.left + rectB.width / 2;
+          const yB = rectB.top - appRect.top + rectB.height / 2;
+          
+          if (step === 0) {
+            // Position at cell A and fade in
+            hand.style.left = `${xA}px`;
+            hand.style.top = `${yA}px`;
+            hand.style.transform = "translate(-50%, -50%) scale(1.1)";
+            hand.style.opacity = "1";
+            
+            // Clear selections visually
+            cellA.classList.remove("selected");
+            cellB.classList.remove("selected");
+            
+            setTimeout(() => { step = 1; runStep(); }, 500);
+          } else if (step === 1) {
+            // Tap cell A (scale down)
+            hand.style.transform = "translate(-50%, -50%) scale(0.9)";
+            cellA.classList.add("selected");
+            
+            setTimeout(() => { step = 2; runStep(); }, 400);
+          } else if (step === 2) {
+            // Move to cell B (keep scale 1.1)
+            hand.style.left = `${xB}px`;
+            hand.style.top = `${yB}px`;
+            hand.style.transform = "translate(-50%, -50%) scale(1.1)";
+            
+            setTimeout(() => { step = 3; runStep(); }, 600);
+          } else if (step === 3) {
+            // Tap cell B (scale down)
+            hand.style.transform = "translate(-50%, -50%) scale(0.9)";
+            cellB.classList.add("selected");
+            
+            setTimeout(() => { step = 4; runStep(); }, 400);
+          } else if (step === 4) {
+            // Clear selection highlight and restart
+            hand.style.opacity = "0";
+            setTimeout(() => {
+              cellA.classList.remove("selected");
+              cellB.classList.remove("selected");
+              step = 0;
+              // Loop again after brief delay
+              setTimeout(() => runStep(), 800);
+            }, 500);
+          }
+        };
+        
+        runStep();
+      },
+      
+      stop() {
+        this.active = false;
+        const hand = document.getElementById("tutorial-indicator");
+        if (hand) {
+          hand.style.display = "none";
+          hand.style.opacity = "0";
+        }
+        const cellA = document.getElementById("cell-0-6");
+        const cellB = document.getElementById("cell-0-7");
+        if (cellA) cellA.classList.remove("selected");
+        if (cellB) cellB.classList.remove("selected");
       }
     };
 
